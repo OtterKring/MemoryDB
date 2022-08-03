@@ -154,14 +154,149 @@ Linking to the cells of an array is default behavior of Powershell. While often 
 
 ## Looking up data
 
+### Querying a Primary Key
+
 ```
 #####
-# using the function
+# using the function; 1000 random calls = ~5sec
 
+Get-MemoryDBEntry -Name AllAD -KeyValue 'einstein'
 
+#####
+# using the class; 1000 random calls = ~4sec
+
+$AllAD.Lookup( 'einstein' )
+```
+
+### Querying an optional Index
+
+```
+#####
+# using the function; 1000 random calls = 5.5sec
+
+Get-MemoryDBEntry -Name AllAD -KeyValue '17010042' -IndexName EmployeeID
 
 #####
 # using the class
+#
+# ... with ANY index; 1000 random calls = 4sec
 
+$AllAD.IX.Lookup( '17010042' )
+
+# ... with a SPECIFIC index
+
+# if you want to know the array index of your desired index:
+
+$AllAD.GetIndices()
+
+Id Key
+-- ---
+ 0 EmployeeID
+ 1 DisplayName
+
+# choose one of the two; 1000 random calls = 3.5sec 
+
+$AllAD.IX[0].Lookup( '17010042' )
+$AllAD.IX.Where{$_.Key -eq 'EmployeeID'}.Lookup( '17010042' )
+```
+
+**Now we are talking!**
+
+This is were even the `foreach` loop in our simple caching example falls back, taking ~3 times longer for 1000 queries, let alone the 40min it took AD to deliver the unindexed field.
+
+## Case Sensitivity
+
+<hr>
+<div align=center>
+
+**ATTENTION classic PowerShell users!**
+</div>
+
+Since MemoryDB is using a `System.Collections.Generic.SortedDictionary<T>` as its base data type
+**it is case sensitive by default!**
+
+This means it is not the same querying for `einstein@mydomain.net` or `einstein@MYDOMAIN.NET`!
+<hr>
+
+It is nevertheless possible to either ...
+* create the MemoryDB case **in**sensitive
 
 ```
+$AllAD = [memorydb]::new( $Data, 'SamAccountName', $true )
+
+# or
+
+$Data | New-MemoryDB -Name AllAD -PrimaryKey SamAccountName -CaseInsensitiveKeys
+```
+
+* or ignore the case during lookup
+
+```
+$AllAD.CaseInsensitiveLookup('einstein')
+$AllAD.IX.Where{$_.Key -eq 'DisplayName'}.CaseInsensitiveLookup('einstein albert')
+
+# or
+
+Get-MemoryDBEntry -Name AllAD -KeyValue einstein -CaseInsensitiveLookup
+Get-MemoryDBEntry -Name AllAD -KeyValue 'einstein albert' -IndexName DisplayName -CaseInsensitiveLookup
+```
+
+**NOTE:** doing a case insensitive lookup in a case sensitive MemoryDB may return multiple results (e.g. you will get the entry for 'EINSTEIN Albert' and 'Einstein Albert' if both are present). Be sure to take care of that.
+
+## Adding, Updating, Removing
+
+### ... Datasets
+
+<table>
+    <tr>
+        <th> Class </th>
+        <th> Function </th>
+    </tr>
+    <tr>
+        <td> $AllAD.AddDataset( $set ) </td>
+        <td> New-MemoryDBEntry -Name AllAD -DataSet $set </td>
+    </tr>
+    <tr>
+        <td> $AllAD.UpdateDataset( $set ) </td>
+        <td> Update-MemoryDBEntry -Name AllAD -DataSet $set </td>
+    </tr>
+    <tr>
+        <td> $AllAD.RemoveDataset( $set ) </td>
+        <td> Remove-MemoryDBEntry -Name AllAD -DataSet $set </td>
+    </tr>
+</table>
+
+
+### ... Indices
+
+<table>
+    <tr>
+        <th> Class </th>
+        <th> Function </th>
+    </tr>
+    <tr>
+        <td> $AllAD.NewIndex( $Propertyname ) </td>
+        <td> New-MemoryDBIndex -Name AllAD -IndexName $Propertyname </td>
+    </tr>
+    <tr>
+        <td> $AllAD.RemoveIndex( $Propertyname ) </td>
+        <td> Remove-MemoryDBIndex -Name AllAD -IndexName $Propertyname </td>
+    </tr>
+</table>
+
+There is no "updating" for indices, since this is done in the background when needed, but you can have the MemoryDB show you the current indices:
+
+<table>
+    <tr>
+        <th> Class </th>
+        <th> Function </th>
+    </tr>
+    <tr>
+        <td> $AllAD.GetIndices() </td>
+        <td> Get-MemoryDBIndex -Name AllAD [-IndexName $Propertyname] </td>
+    </tr>
+</table>
+
+
+<hr>
+<p align=right>Maximilian Otter 2022-08-02</p>

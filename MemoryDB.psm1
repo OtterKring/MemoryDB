@@ -846,7 +846,7 @@ function Get-MemoryDBEntry {
         # get a reference to the existing MemoryDB
         $memdb = Test-MemoryDB -Name $Name
 
-        if ( $memdb.Indices -notcontains $IndexName ) {
+        if ( $PSBoundParameters.ContainsKey('IndexName') -and $memdb.Indices -notcontains $IndexName ) {
             Throw "MemoryDB `"$Name`" does not contain an index for the property `"$IndexName`"."
         }
 
