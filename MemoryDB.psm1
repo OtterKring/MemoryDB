@@ -299,26 +299,32 @@ class MemoryDB {
     # Add a dataset to the stored data and update the indices
     [void] AddDataset ( [PSObject]$DataSet ) {
 
-        # add the new dataset, so we have it together with the old data for PK uniqueness check
-        $this.Data.Add( [PSCustomObject]$DataSet )
+        if ( $this.GetProperty( $DataSet, $this.PrimaryKey ) ) {
 
-        # only update indices if the PrimaryKey is still unique
-        if ( $this.isUniqueProperty( $this.Data, $this.PrimaryKey ) ) {
+            if ( -not $this.Lookup($DataSet.$($this.PrimaryKey)) ) {
 
-            # update PrimaryKey index
-            $this.PK.AddEntry( $DataSet )
+                # add the new dataset, so we have it together with the old data for PK uniqueness check
+                $this.Data.Add( [PSCustomObject]$DataSet )
 
-            # update all other indices (if any)
-            foreach ($index in $this.IX) {
-                $index.AddEntry( $DataSet )
+                # update PrimaryKey index
+                $this.PK.AddEntry( $DataSet )
+
+                # update all other indices (if any)
+                foreach ($index in $this.IX) {
+                    $index.AddEntry( $DataSet )
+                }                
+            } else {
+
+                # remove new dataset from our data structure and complain
+                [void]$this.Data.Remove( $this.Data[-1] )
+                Throw "The new dataset cannot be added. PrimaryKey `"$($this.PrimaryKey)`" already exists."
+
             }
 
-        # PrimaryKey not unique anymore?
         } else {
 
-            # remove new dataset from our data structure and complain
-            [void]$this.Data.Remove( $this.Data[-1] )
-            Throw "The new dataset cannot be added. PrimaryKey `"$($this.PrimaryKey)`" already exists."
+            Throw "The new dataset cannot be added. PrimaryKey property `"$($this.PrimaryKey)`" is not present."
+
         }
 
     }
@@ -475,7 +481,7 @@ class MemoryDB {
 
         $Multiples = $Data |
             Group-Object -Property $Property -NoElement |
-            Where-Object Cout -gt 1
+            Where-Object Count -gt 1
 
         if (!$Multiples) {
             return $true
