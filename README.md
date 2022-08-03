@@ -68,7 +68,7 @@ If you don't care for any bells and whistles you can just cache the data you nee
 ```
 $AllAD = Get-ADUser -Properties DisplayName,EmployeeID | Select-Object DisplayName,SamAccountName,EmployeeID,Enabled
 
-# took ~15 sec
+# 12000+ entries, took ~15 sec
 ```
 
 ... and then use the usual PowerShell options to search for the data you want:
@@ -89,5 +89,79 @@ If you only expect one result anyway you could speed up the `foreach` even more 
 
 1000 searches for a random EmployeeId (with the `break`) like we did before are now done in ~16s on my machine. A lot better than the 40min from before!
 
-### using the MemoryDB module
+# Using the MemoryDB module
 
+The MemoryDB module is maybe a bit of an overkill for the given example, but it nevertheless provides the same advantages, adding the possibility to define multiple indices for fast access to your data and not being restricted to only one "search property".
+
+The module was initially designed to be class-based, but to make it easier to use for non-class people I added a couple of wrapper functions which may eat up some performance compared to the pure class usage but on the other hand provide pipeline support.
+
+## Initialize your MemoryDB
+
+After importing the module you can start straight away with the functions the module provides.
+
+If you want to use the classes directly you must run "`using module <path to memorydb module>`" after the import.
+
+1) Load your initial data
+
+```
+#####
+# using the function, takes ~1.5min for me
+
+Get-ADUser -Filter * -Properties DisplayName,EmployeeID | Select-Object DisplayName,SamAccountName,EmployeeID,Enabled | New-MemoryDB -Name AllAD -PrimaryKey SamAccountName
+
+#####
+# using the class, which requires having the data in an array at first
+
+# ~15 sec
+$ADData = Get-ADUser -Filter * -Properties DisplayName,EmployeeID | Select-Object DisplayName,SamAccountName,EmployeeID,Enabled
+
+# ~26 sec
+$AllAD = [memorydb]::new( $ADData, 'SamAccountName' )
+```
+
+Using the class is a lot faster than using the function, since it loads all the data in one run, checking for uniqueness of the PrimaryKey using the full array, while the function, to make pipelining possible, adds the datasets one by one checking each for providing a unique value for the primary key. It uses less memory, though, since it does not require the data preloaded.
+
+### why is loading the MemoryDB slower than simple variable caching?
+
+Compared to the simple caching in the example used to show the performance differences loading the MemoryDB is still a bit slower, even if you use the class, because, while in our simple caching example you just push the data straight to an array without bells and whistles, the MemoryDB uses a SortedDictionary, so it checks the uniqueness of each key added, sorts the entries while they are being added and creates the primary key index along the way.
+
+2) Add additional indices (optional)
+
+While the primary key index is created immediately when loading the MemoryDB or adding a dataset, additional indices are optional and can be created or removed whenever you want. Once they are created they are updated automatically whenever a change in the MemoryDB is done.
+
+```
+#####
+# using the function, ~55 seconds
+
+New-MemoryDBIndex -Name AllAD -IndexName DisplayName
+
+
+#####
+# using the class, ~ 9 seconds
+
+$AllAD.NewIndex('EmployeeID')
+```
+
+I admit I was a little bit surprised about the speed difference here, since the function doesn't do more than calling the class. I suppose it is linked to the more displaynames being more complex data than the employeeids and thus take more effort for sorting.
+Additionally you may already have notices, that DisplayName will not be a unique index. The additional indices are not unique and can return multiple datasets for a key.
+
+### aren't these indices wasting a lot of memory?
+
+Yes and no.
+
+The key fields are duplicated, of course, because the provide the value the SortedDictionary uses to sort and retrieve its data. The actual dataset indexed is linked "by reference", so the index just points to the original dataset but does not hold its own copy. The advantage of this, apart from the memory usage, is, that all changes done in the data are immediately visible in the index, too.
+Linking to the cells of an array is default behavior of Powershell. While often loathed for making actually copying arrays a tedious process, it is a welcome feature here.
+
+## Looking up data
+
+```
+#####
+# using the function
+
+
+
+#####
+# using the class
+
+
+```
