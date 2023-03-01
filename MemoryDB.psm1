@@ -15,14 +15,16 @@ class Index {
     [string] $Key
     [bool] $CaseInsensitiveKey = $false
 
-    hidden $LookupTable = [System.Collections.Generic.SortedDictionary[string,System.Collections.Generic.List[PSObject]]]::new()
+    # hidden $LookupTable = [System.Collections.Generic.SortedDictionary[string,System.Collections.Generic.List[PSObject]]]::new()
+    hidden $LookupTable
 
 
     # Constructor taking the data to index and the desired index key as parameters.
     # the index will be set up case sensitive
     Index ( [PSObject[]]$Data, [string]$KeyString ) {
 
-        $this.Init( $Data, $KeyString, $false )
+        $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,System.Collections.Generic.List[PSObject]]]::new()
+        $this.Init( $Data, $KeyString )
 
     }
 
@@ -30,20 +32,26 @@ class Index {
     # whether the index will treat the keys case insensitive or not as parameters
     Index ( [PSObject[]]$Data, [string]$KeyString, [bool]$CIK ) {
 
-        $this.Init( $Data, $KeyString, $CIK )
+        if ( -not $CIK ) {
+            $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,System.Collections.Generic.List[PSObject]]]::new()
+        } else {
+            $this.CaseInsensitiveKey = $CIK
+            $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,System.Collections.Generic.List[PSObject]]]::new( [System.StringComparer]::CurrentCultureIgnoreCase )
+        }
+
+        $this.Init( $Data, $KeyString )
 
     }
 
     # helper initialization method to be used by multiple constructors
-    hidden [void] Init ( [PSObject[]]$Data, [string]$KeyString, [bool]$CIK ) {
+    hidden [void] Init ( [PSObject[]]$Data, [string]$KeyString ) {
 
-        $this.CaseInsensitiveKey = $CIK
         $this.Key = $this.GetProperty( $Data[0], $KeyString )
 
         if ( $this.Key ) {
 
             # if this index should work case insensitive, set the key to lower case
-            $this.Key = $this.CaseSafeKey( $this.Key )
+            # $this.Key = $this.CaseSafeKey( $this.Key )
 
             foreach ($set in $Data) {
                 $this.AddEntry( $set )
@@ -57,14 +65,14 @@ class Index {
     # return the requested property name from a dataset to get its original case
     [string] GetProperty ( [PSObject]$DataSet, [string]$Property ) {
 
-        return $DataSet.PSObject.Properties.Where{$_.Name -eq $Property}.Name
+        return $DataSet.PSObject.Properties.Where{ $_.Name -eq $Property }.Name
 
     }
 
     # THIS IS >>>THE<<< METHOD to lookup data using thi index!
     [PSObject] Lookup ( [string] $SearchString ) {
 
-        $SearchString = $this.CaseSafeKey( $SearchString )
+        # $SearchString = $this.CaseSafeKey( $SearchString )
         return $this.LookupTable.$SearchString
 
     }
@@ -85,7 +93,8 @@ class Index {
     [void] AddEntry ( [PSObject]$DataSet ) {
 
         # get the index value from the dataset
-        $LookupValue = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        # $LookupValue = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        $LookupValue = $DataSet.$($this.Key)
 
         # if the index value already exists, add the dataset to its list of datasets (non-unique index)
         # if it doesn't, add a new index value and add the dataset there
@@ -102,7 +111,8 @@ class Index {
     [void] RemoveEntry ( [PSObject]$DataSet ) {
 
         # get the index value from the dataset
-        $LookupValue = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        # $LookupValue = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        $LookupValue = $DataSet.$($this.Key)
 
         # remove the dataset from the list at the index value
         $success = $this.LookupTable.$LookupValue.Remove( $DataSet )
@@ -131,8 +141,10 @@ class Index {
     # IF the value of this index in the new dataset has changed
     [void] UpdateEntry ( [PSObject]$oldDataSet, [PSObject]$newDataSet ) {
 
-        $oldLookupValue = $this.CaseSafeKey( $oldDataSet.$($this.Key) )
-        $newLookupValue = $this.CaseSafeKey( $newDataSet.$($this.Key) )
+        # $oldLookupValue = $this.CaseSafeKey( $oldDataSet.$($this.Key) )
+        # $newLookupValue = $this.CaseSafeKey( $newDataSet.$($this.Key) )
+        $oldLookupValue = $oldDataSet.$($this.Key)
+        $newLookupValue = $newDataSet.$($this.Key)
 
         # if new index values of the old and the new dataset are different, remove the old and add the new one
         # no need to do anything if they are equal, because the index only links to the original dataset,
@@ -161,15 +173,15 @@ class Index {
 
     # if the index was set to be case insensitive,
     # this method converts the give key string to lower case
-    hidden [string] CaseSafeKey ( [string]$KeyString ) {
+    # hidden [string] CaseSafeKey ( [string]$KeyString ) {
 
-        if ( $KeyString -and $this.CaseInsensitiveKey ) {
-            return $KeyString.ToLower()
-        } else {
-            return $KeyString
-        }
+    #     if ( $KeyString -and $this.CaseInsensitiveKey ) {
+    #         return $KeyString.ToLower()
+    #     } else {
+    #         return $KeyString
+    #     }
 
-    }
+    # }
 
 }
 
@@ -199,16 +211,31 @@ class UniqueIndex : Index {
 
     # Constructor with dataset and key as parameters, redirects to base constructor
     # Index will use case sensitive keys
-    UniqueIndex ( [PSObject]$DataSet, [string]$Key ) : base( $DataSet, $Key ) {}
+    UniqueIndex ( [PSObject]$Data, [string]$KeyString ) {
+
+        $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
+        $this.Init( $Data, $KeyString )
+
+    }
 
     # Constructor with dataset, key and case insensitivity switch as parameters, redirects to base constructor
-    UniqueIndex ( [PSObject]$DataSet, [string]$KeyString, [bool]$CIK ) : base( $DataSet, $KeyString, $CIK ) {}
+    UniqueIndex ( [PSObject]$Data, [string]$KeyString, [bool]$CIK ) {
+
+        if ( -not $CIK ) {
+            $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
+        } else {
+            $this.CaseInsensitiveKey = $CIK
+            $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new( [System.StringComparer]::CurrentCultureIgnoreCase )
+        }
+
+        $this.Init( $Data, $KeyString )
+    }
 
 
     # Adding an entry to the index, pointing to the given dataset
     [void] AddEntry ( [PSObject]$DataSet ) {
 
-        $SearchString = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        $SearchString = $DataSet.$($this.Key)
         $this.LookupTable.Add( $SearchString, $DataSet )
 
     }
@@ -216,7 +243,7 @@ class UniqueIndex : Index {
     # Removing an entry from the index
     [void] RemoveEntry ( [PSObject]$DataSet ) {
 
-        $SearchString = $this.CaseSafeKey( $DataSet.$($this.Key) )
+        $SearchString = $DataSet.$($this.Key)
         $success = $this.LookupTable.Remove( $SearchString )
 
         if ( -not $success ) {
@@ -269,7 +296,7 @@ class MemoryDB {
     hidden [void] Init ( [PSObject[]]$Data, [string]$PrimaryKey, [bool]$CaseInsensitiveKeys ) {
 
         # Get the requested Property from the given Data and it's original case
-        $Key = $this.CaseSafeKey( $this.GetProperty( $Data[0], $PrimaryKey ) )
+        $Key = $this.GetProperty( $Data[0], $PrimaryKey )
 
         # only build the DB if the property exits in the given data
         if ( $Key ) {
@@ -492,15 +519,15 @@ class MemoryDB {
     }
 
     # if the MemoryDB is created case insensitive, the method returns the given string in lower case
-    hidden [string] CaseSafeKey ( [string]$KeyString ) {
+    # hidden [string] CaseSafeKey ( [string]$KeyString ) {
 
-        if ( $KeyString -and $this.CaseInsensitiveKeys ) {
-            return $KeyString.ToLower()
-        } else {
-            return $KeyString
-        }
+    #     if ( $KeyString -and $this.CaseInsensitiveKeys ) {
+    #         return $KeyString.ToLower()
+    #     } else {
+    #         return $KeyString
+    #     }
 
-    }
+    # }
 
 }
 
