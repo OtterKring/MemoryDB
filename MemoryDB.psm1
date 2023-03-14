@@ -199,7 +199,7 @@ class Index {
 class UniqueIndex : Index {
 
     # hidden [System.Collections.Generic.SortedDictionary[string,PSObject]] $LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
-    hidden $LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
+    hidden $LookupTable
 
     # parameterless constructor, only necessary for inheritance
     UniqueIndex () {
@@ -211,7 +211,7 @@ class UniqueIndex : Index {
 
     # Constructor with dataset and key as parameters, redirects to base constructor
     # Index will use case sensitive keys
-    UniqueIndex ( [PSObject]$Data, [string]$KeyString ) {
+    UniqueIndex ( [PSObject[]]$Data, [string]$KeyString ) {
 
         $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
         $this.Init( $Data, $KeyString )
@@ -219,7 +219,7 @@ class UniqueIndex : Index {
     }
 
     # Constructor with dataset, key and case insensitivity switch as parameters, redirects to base constructor
-    UniqueIndex ( [PSObject]$Data, [string]$KeyString, [bool]$CIK ) {
+    UniqueIndex ( [PSObject[]]$Data, [string]$KeyString, [bool]$CIK ) {
 
         if ( -not $CIK ) {
             $this.LookupTable = [System.Collections.Generic.SortedDictionary[string,PSObject]]::new()
